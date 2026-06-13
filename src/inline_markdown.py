@@ -3,26 +3,27 @@ import re
 from textnode import TextNode, TextType
 
 
+def text_to_textnodes(text: str) -> list[TextNode]:
+    """
+    Convert raw markdown text into a list of TextNode objects.
+    """
+    new_nodes = [TextNode(text, TextType.TEXT)]
+    new_nodes = split_nodes_delimiter(new_nodes, "**", TextType.BOLD)
+    new_nodes = split_nodes_delimiter(new_nodes, "_", TextType.ITALIC)
+    new_nodes = split_nodes_delimiter(new_nodes, "`", TextType.CODE)
+    new_nodes = split_nodes_links(new_nodes, TextType.IMAGE)
+    new_nodes = split_nodes_links(new_nodes, TextType.LINK)
+
+    return new_nodes
+
+
 def split_nodes_delimiter(
         old_nodes: list[TextNode], 
         delimiter: str, 
         text_type: TextType
     ) -> list[TextNode]:
     """
-    Splits raw markdown text from each TextNode in a list of TextNodes 
-    using the delimiter provided and converting the TextType.
-
-    Args:
-        old_nodes (list[TextNode]): A list of TextNodes to be split 
-
-        delimiter (str): Delimiter character(s) used in .split() call
-
-        text_type (TextType): TextType for the TextNode to be converted
-                              to if delimiter is present
-
-    Returns:
-        list[TextNode]: A list of split TextNodes
-            
+    Split text nodes on a markdown delimiter; convert delimited text.            
     """
 
     new_nodes = []
@@ -33,7 +34,7 @@ def split_nodes_delimiter(
         else:
             delimited_strings = old_node.text.split(delimiter)
             if len(delimited_strings) % 2 == 0:
-                raise SyntaxError("Invalid Markdown Syntax found")
+                raise ValueError(f"Invalid markdown: unmatched {delimiter!r} delimiter")
             for i, text in enumerate(delimited_strings):
                 if text == "":
                     continue
@@ -43,20 +44,12 @@ def split_nodes_delimiter(
     return new_nodes
 
 
-def split_nodes_by_type(
+def split_nodes_links(
         old_nodes: list[TextNode], 
         text_type: TextType
-    ) -> list[TextNodes]:
+    ) -> list[TextNode]:
     """
-    Helper function for split_nodes_image() and split_nodes_link
-
-    Args:
-        old_node_text (str): A string of raw text to be split
-        delimiter (str): Image or link inside old text
-        text_type (TextType): Correspinging TextType of the caller
-
-    Returns:
-        list[TextNode]: A list of split TextNodes
+    Split text member of each node in list into nodes by type.
     """
     new_nodes = []
     
@@ -66,11 +59,15 @@ def split_nodes_by_type(
         else:
             remaining_text = old_node.text
             if text_type == TextType.IMAGE:
-                extracted_images: list[tuple[str, str]] = extract_markdown_images(old_node.text)
+                extracted_links: list[tuple[str, str]] = extract_md_links(
+                        old_node.text, TextType.IMAGE
+                        )
             else:
-                extracted_images: list[tuple[str, str]] = extract_markdown_links(old_node.text)
-            if extracted_images:
-                for text, url in extracted_images:
+                extracted_links: list[tuple[str, str]] = extract_md_links(
+                        old_node.text, TextType.LINK
+                        )
+            if extracted_links:
+                for text, url in extracted_links:
                     if text_type == TextType.IMAGE:
                         delimiter = f"![{text}]({url})"
                     else:
@@ -83,72 +80,26 @@ def split_nodes_by_type(
                 if remaining_text != "":
                     new_nodes.append(TextNode(remaining_text, TextType.TEXT))
             else:
-                new_nodes.append(TextNode(remaining_text, TextType.TEXT))
+                new_nodes.append(old_node)
     
     return new_nodes
 
 
-def split_nodes_image(nodes: list[TextNode]) -> list[TextNode]:
+def extract_md_links(
+        text: str, text_type: TextType
+        ) -> list[tuple[str, str]]:
     """
-    Splits the text member of each TextNode in a list into new 
-    TextNodes, setting qualifying nodes to TextType.IMAGE.
-
-    Args:
-        nodes (list[TextNode]): A list of TextNodes to be processed
-
-    Returns:
-        list[TextNode]: A list of split TextNodes
+    Helper function for split_nodes_links().
     """
-
-    return split_nodes_by_type(nodes, TextType.IMAGE)
-
-
-def split_nodes_link(nodes: list[TextNode]) -> list[TextNode]:
-    """
-    Splits the text member of each TextNode in a list into new 
-    TextNodes, setting qualifying nodes to TextType.LINK.
-
-    Args:
-        nodes (list[TextNode]: A list of TextNodes to be processed
-
-    Returns:
-        list[TextNode]: A list of split TextNodes
-    """
-
-    return split_nodes_by_type(nodes, TextType.LINK)
-
-
-def extract_markdown_images(text: str) -> list[tuple[str, str]]:
-    r"""
-    Extracts markdown images from raw markdown text.
-
-    Args:
-        text: str - The raw markdown string
-
-    Returns:
-        list[tuple[str, str]] - A list of tuples containing:
-            (alt_text, url)
-
-            Prohibited characters in alt_text: [, ], \n, \r, \t
-            Prohibited characters in url: (, ), \n, \r, \t
-    """
-    image_regex_pattern = r"\!\[([^\[\]\n\r\t]*)\]\(([^\(\)\n\r\t]*)\)"   
-    return re.findall(image_regex_pattern, text)
-
-
-def extract_markdown_links(text: str) -> list[tuple[str, str]]:
-    r"""
-    Extracts markdown links from raw markdown text.
-
-    Args:
-        text: str - The raw markdown string
-
-    Returns:
-        list[tuple[str,str]] - A list of tuples containing:
-            (title, url)
-
-            Prohibited characters in title: [, ], \n, \r, \t
-            Prohibited characters in url: (, ), \n, \r, \t
-    """
+    image_regex_pattern = r"\!\[([^\[\]\n\r\t]*)\]\(([^\(\)\n\r\t]*)\)"
     link_regex_pattern = r"(?<!!)\[([^\[\]\n\r\t]*)\]\(([^\(\)\n\r\t]*)\)"
-    return re.findall(link_regex_pattern, text)
+    
+    match text_type:
+        case TextType.IMAGE:
+            return re.findall(image_regex_pattern, text)
+        case TextType.LINK:
+            return re.findall(link_regex_pattern, text)
+        case _:
+            raise TypeError(
+                "TextType positional argument missing in extract_md_links() call"
+            )

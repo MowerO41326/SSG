@@ -2,11 +2,10 @@ import unittest
 
 from textnode import TextNode, TextType
 from inline_markdown import (
+        extract_md_links,  
         split_nodes_delimiter, 
-        extract_markdown_images, 
-        extract_markdown_links, 
-        split_nodes_image, 
-        split_nodes_link, 
+        split_nodes_links, 
+        text_to_textnodes, 
         )
 
 
@@ -62,22 +61,25 @@ class TestInlineMarkdown(unittest.TestCase):
 
     def test_unbalanced(self):
         node = TextNode("This is **only** a **test.", TextType.TEXT)
-        with self.assertRaises(SyntaxError):
+        with self.assertRaises(ValueError):
             split_nodes_delimiter([node], "**", TextType.BOLD)
 
 
-    def test_extract_md_images(self):
-        matches = extract_markdown_images(
+    def test_extract_md_links(self):
+        matches = extract_md_links(
             "This is text with an "
-            "![image](https://i.imgur.com/zjjcJKZ.png)"
+            "![image](https://i.imgur.com/zjjcJKZ.png)", 
+            TextType.IMAGE
         )
-        matches2 = extract_markdown_images(
+        matches2 = extract_md_links(
             "This is text with an "
-            "![image!](https://i.imgur.com/zjjcJKZ.png)"
+            "![image!](https://i.imgur.com/zjjcJKZ.png)", 
+            TextType.IMAGE
         )
-        matches3 = extract_markdown_images(
+        matches3 = extract_md_links(
             "This is text with an "
-            "![[image]](https://i.imgur.com/zjjcJKZ.png)"
+            "![[image]](https://i.imgur.com/zjjcJKZ.png)", 
+            TextType.IMAGE
         )
         self.assertListEqual(
                 [("image", "https://i.imgur.com/zjjcJKZ.png")], matches
@@ -89,14 +91,14 @@ class TestInlineMarkdown(unittest.TestCase):
 
 
     def test_extract_md_links(self):
-        matches = extract_markdown_links(
-            "This is text with a [link](https://www.boot.dev)"
+        matches = extract_md_links(
+            "This is text with a [link](https://www.boot.dev)", TextType.LINK
         )
-        matches2 = extract_markdown_links(
-            "This is text with a [link!](https://www.boot.dev)"
+        matches2 = extract_md_links(
+            "This is text with a [link!](https://www.boot.dev)", TextType.LINK
         )
-        matches3 = extract_markdown_links(
-            "This is text with a [[link]](https://www.boot.dev)"
+        matches3 = extract_md_links(
+            "This is text with a [[link]](https://www.boot.dev)", TextType.LINK
         )
         self.assertListEqual([("link", "https://www.boot.dev")], matches)
         self.assertListEqual([("link!", "https://www.boot.dev")], matches2)
@@ -104,17 +106,17 @@ class TestInlineMarkdown(unittest.TestCase):
 
 
     def test_extract_md_wrong_syntax(self):
-        img_matches = extract_markdown_images(
-            "This is wrong syntax for images [image](www.nasa.gov/img.jpg)"
+        img_matches = extract_md_links(
+            "This is wrong syntax for images [image](www.nasa.gov/img.jpg)", TextType.IMAGE
         )
-        img_matches2 = extract_markdown_images(
-            "This is wrong sytanx for images ![image]](www.nasa.gov/1.jpg)"
+        img_matches2 = extract_md_links(
+            "This is wrong sytanx for images ![image]](www.nasa.gov/1.jpg)", TextType.IMAGE
         )
-        link_matches = extract_markdown_links(
-            "This is wrong syntax for links (link)(www.nasa.gov)"
+        link_matches = extract_md_links(
+            "This is wrong syntax for links (link)(www.nasa.gov)", TextType.LINK
         )
-        link_matches2 = extract_markdown_links(
-            "This is wrong syntax for links ![image](www.nasa.com/jpg.png)"
+        link_matches2 = extract_md_links(
+            "This is wrong syntax for links ![image](www.nasa.com/jpg.png)", TextType.LINK
         )
         self.assertFalse(img_matches)
         self.assertFalse(img_matches2)
@@ -122,7 +124,7 @@ class TestInlineMarkdown(unittest.TestCase):
         self.assertFalse(link_matches2)
 
 
-    def test_split_nodes_image(self):
+    def test_split_nodes_links_images(self):
         node = TextNode(
             "This is text with an ![image](https://i.imgur.com/zjjcJKZ.png) "
             "and another ![second image](https://i.imgur.com/3elNhQu.png)", 
@@ -139,9 +141,9 @@ class TestInlineMarkdown(unittest.TestCase):
                 TextNode("More [pics](somepichost.com) of my trip to the bottling plant", TextType.TEXT), 
                 TextNode("Oops forgot to show you ![this](onemore.net) one!", TextType.TEXT), 
                 ]
-        new_nodes = split_nodes_image([node])
-        new_nodes2 = split_nodes_image([node2])
-        new_nodes3 = split_nodes_image(node3)
+        new_nodes = split_nodes_links([node], TextType.IMAGE)
+        new_nodes2 = split_nodes_links([node2], TextType.IMAGE)
+        new_nodes3 = split_nodes_links(node3, TextType.IMAGE)
         self.assertListEqual(
                 [
                     TextNode("This is text with an ", TextType.TEXT), 
@@ -177,7 +179,7 @@ class TestInlineMarkdown(unittest.TestCase):
         )
 
 
-    def test_split_nodes_link(self):
+    def test_split_nodes_links(self):
         node = [
                 TextNode(
                     "This is a [link](url) and [another link](url2)", 
@@ -190,7 +192,7 @@ class TestInlineMarkdown(unittest.TestCase):
                 TextNode("link", TextType.LINK, "to.the.past"), 
                 TextNode("One [link](url), one ![image](img), one more [link](url)", TextType.TEXT), 
             ]
-        new_nodes = split_nodes_link(node)
+        new_nodes = split_nodes_links(node, TextType.LINK)
         self.assertListEqual(
             [
                 TextNode("This is a ", TextType.TEXT), 
@@ -206,3 +208,40 @@ class TestInlineMarkdown(unittest.TestCase):
             ],
             new_nodes, 
         )
+
+
+    def test_text_to_textnodes(self):
+        text = (
+            "This is **text** with an _italic_ word and a `code block` "
+            "and an ![obi wan image](https://i.imgur.com/fJRm4Vk.jpeg) and a "
+            "[link](https://boot.dev)"
+        )
+        text2 = "This is some text with just a [link](https://www.boot.dev) in the middle."
+        text3 = ""
+        nodes = text_to_textnodes(text)
+        nodes2 = text_to_textnodes(text2)
+        nodes3 = text_to_textnodes(text3)
+        self.assertListEqual(
+            [
+                TextNode("This is ", TextType.TEXT),
+                TextNode("text", TextType.BOLD),
+                TextNode(" with an ", TextType.TEXT),
+                TextNode("italic", TextType.ITALIC),
+                TextNode(" word and a ", TextType.TEXT),
+                TextNode("code block", TextType.CODE),
+                TextNode(" and an ", TextType.TEXT),
+                TextNode("obi wan image", TextType.IMAGE, "https://i.imgur.com/fJRm4Vk.jpeg"),
+                TextNode(" and a ", TextType.TEXT),
+                TextNode("link", TextType.LINK, "https://boot.dev"),
+            ], 
+            nodes, 
+        )
+        self.assertListEqual(
+            [
+                TextNode("This is some text with just a ", TextType.TEXT), 
+                TextNode("link", TextType.LINK, "https://www.boot.dev"), 
+                TextNode(" in the middle.", TextType.TEXT), 
+            ], 
+            nodes2, 
+        )
+        self.assertListEqual([], nodes3)

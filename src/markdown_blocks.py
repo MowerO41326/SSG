@@ -1,13 +1,13 @@
-import enum
+from enum import Enum
 
 
 class BlockType(Enum):
-    PARA = "paragraph"
-    HEAD = "heading"
+    PARAGRAPH = "paragraph"
+    HEADING = "heading"
     CODE = "code"
     QUOTE = "quote"
-    UNORD = "unordered list"
-    ORD = "ordered list"
+    UNORDLIST = "unordered list"
+    ORDLIST = "ordered list"
 
 def markdown_to_blocks(markdown: str) -> list[str]:
     """
@@ -23,26 +23,43 @@ def markdown_to_blocks(markdown: str) -> list[str]:
     return blocks
 
 
-def block_to_block_type(text: str) -> BlockType:
-    # check for headings
-    # (must have 1-6 "#" + " " followed by text)
-    # return BlockType.HEAD
+def block_to_block_type(block: str) -> BlockType:
+    lines = block.split("\n")
+
+    if block.startswith(
+            ("# ", "## ", "### ", "#### ", "##### ", "###### ")
+        ):
+        return BlockType.HEADING
     
-    # case: multiline code blocks
-    # (must start with "```\n" and end with "```")
-    # return BlockType.CODE
+    if len(lines) > 1:
+        if lines[0].startswith("```") and lines[-1].endswith("```"):
+            return BlockType.CODE
 
-    # case: quote block
-    # (must begin with ">")
-    # return BlockType.QUOTE
+    is_quote = True
+    if block.startswith(">"):
+        for line in lines:
+            if not line.startswith(">"):
+                is_quote = False
+                break
+        if is_quote:
+            return BlockType.QUOTE
 
-    # case: unordered list
-    # (must begin with "-")
-    # return BlockType.UNORD
+    is_unordlist = True
+    if block.startswith("- "):
+        for line in lines:
+            if not line.startswith("- "):
+                is_unordlist = False
+                break
+        if is_unordlist:
+            return BlockType.UNORDLIST
 
-    # case: ordered list 
-    # (must begin with "1. " and each subsequent line must increment by 1)
-    # return BlockType.ORD
+    is_ordlist = True
+    if block.startswith("1. "):
+        for i in range(len(lines)):
+            if not lines[i].startswith(f"{i+1}. "):
+                is_ordlist = False
+                break
+        if is_ordlist:
+            return BlockType.ORDLIST
 
-    # case _:
-    # return BlockType.PARA
+    return BlockType.PARAGRAPH

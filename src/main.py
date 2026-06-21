@@ -83,7 +83,7 @@ def generate_page(
     html_page = template.replace("{{ Title }}", title)
     html_page = html_page.replace("{{ Content }}", article)
     html_page = html_page.replace('href="/', f'href="{basepath}')
-    html_page = html_page.replace('src="/', f'href="{basepath}')
+    html_page = html_page.replace('src="/', f'src="{basepath}')
 
     dir_name = os.path.dirname(destination_path)
     os.makedirs(dir_name, exist_ok=True)

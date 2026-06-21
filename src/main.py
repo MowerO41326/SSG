@@ -6,9 +6,24 @@ from markdown_blocks import extract_title, markdown_to_html_node
 from pathlib import Path
 
 
+source_path = "content"
+destination_path = "docs"
+static_path = "static"
+template_path = "template.html"
+default_basepath = "/"
+
+
 def main() -> None:
-    copy_tree("static", "public")
-    generate_pages_recursive("content", "template.html", "public")
+    basepath = default_basepath
+    if len(sys.argv) > 2:
+        print("Error: too many arguments")
+        print("Usage: python3 main.py <source_path>")
+        sys.exit(1)
+    else:
+        basepath = sys.argv[1]
+
+    copy_tree(static_path, destination_path)
+    generate_pages_recursive(source_path, template_path, destination_path, basepath)
 
 
 def copy_tree(source: str, destination: str) -> None:
@@ -47,6 +62,7 @@ def generate_page(
     source_path: str | Path, 
     template_path: str, 
     destination_path: str | Path, 
+    basepath: str, 
 ) -> None:
     """
     Generate HTML page from markdown file using template.
@@ -66,6 +82,8 @@ def generate_page(
 
     html_page = template.replace("{{ Title }}", title)
     html_page = html_page.replace("{{ Content }}", article)
+    html_page = html_page.replace('href="/', f'href="{basepath}')
+    html_page = html_page.replace('src="/', f'href="{basepath}')
 
     dir_name = os.path.dirname(destination_path)
     os.makedirs(dir_name, exist_ok=True)
@@ -75,7 +93,10 @@ def generate_page(
     print(f'Conversion complete.  Page "{title}" created.')
 
 def generate_pages_recursive(
-    source_path: str, template_path: str, destination_path: str
+    source_path: str, 
+    template_path: str, 
+    destination_path: str, 
+    basepath: str, 
 ) -> None:
     """
     Generate HTML pages from markdown files using template, recursively.
@@ -93,9 +114,10 @@ def generate_pages_recursive(
                 old_path, 
                 template_path, 
                 new_path.with_suffix(".html"), 
+                basepath, 
             )
         elif os.path.isdir(old_path):
-            generate_pages_recursive(old_path, template_path, new_path)
+            generate_pages_recursive(old_path, template_path, new_path, basepath)
         else:
             raise Exception("Error: <item> is neither file, nor directory")
 
